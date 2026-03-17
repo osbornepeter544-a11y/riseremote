@@ -1,0 +1,127 @@
+const express = require("express");
+const axios = require("axios");
+const path = require("path");
+const { Pool } = require("pg");
+
+const app = express();
+const PORT = process.env.PORT || 10000;
+
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+});
+
+async function initializeDatabase() {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS jobs (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            company TEXT NOT NULL,
+            category TEXT,
+            url TEXT NOT NULL,
+            source TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    `);
+    console.log("Jobs table ready");
+}
+
+app.use(express.static(path.join(__dirname, "public")));
+
+function normalizeTitle(title) {
+    return title.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+async function fetchAndStoreJobs() {
+    const remotivePromise = axios.get("https://remotive.com/api/remote-jobs");
+    const arbeitnowPromise = axios.get("https://www.arbeitnow.com/api/job-board-api");
+
+    const [remotiveResponse, arbeitnowResponse] = await Promise.all([
+        remotivePromise,
+        arbeitnowPromise
+    ]);
+
+    const remotiveJobs = remotiveResponse.data.jobs.map(job => ({
+        id: `remotive-${job.id}`,
+        title: job.title,
+        company: job.company_name,
+        category: job.category,
+        url: job.url,
+        source: "remotive"
+    }));
+
+    const arbeitnowJobs = arbeitnowResponse.data.data.map(job => ({
+        id: `arbeitnow-${job.slug}`,
+        title: job.title,
+        company: job.company_name,
+        category: job.tags?.join(", ") || "General",
+        url: job.url,
+        source: "arbeitnow"
+    }));
+
+    const combined = [...remotiveJobs, ...arbeitnowJobs];
+
+    const seen = new Set();
+    const uniqueJobs = [];
+
+    for (const job of combined) {
+        const key = normalizeTitle(job.title);
+        if (!seen.has(key)) {
+            seen.add(key);
+            uniqueJobs.push(job);
+        }
+    }
+
+    for (const job of uniqueJobs) {
+        await pool.query(`
+            INSERT INTO jobs (id, title, company, category, url, source)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (id) DO NOTHING;
+        `, [job.id, job.title, job.company, job.category, job.url, job.source]);
+    }
+
+    console.log("Jobs synced to database");
+}
+
+app.get("/api/jobs", async (req, res) => {
+    try {
+        const limitQuery = parseInt(req.query.limit);
+        const DEFAULT_LIMIT = 100;
+        const MAX_LIMIT = 500;
+
+        const limit = (!isNaN(limitQuery) && limitQuery > 0)
+            ? Math.min(limitQuery, MAX_LIMIT)
+            : DEFAULT_LIMIT;
+
+        const result = await pool.query(
+            `SELECT * FROM jobs ORDER BY created_at DESC LIMIT $1`,
+            [limit]
+        );
+
+        if (result.rows.length === 0) {
+            await fetchAndStoreJobs();
+            const retry = await pool.query(
+                `SELECT * FROM jobs ORDER BY created_at DESC LIMIT $1`,
+                [limit]
+            );
+            return res.json(retry.rows);
+        }
+
+        res.json(result.rows);
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Failed to retrieve jobs" });
+    }
+});
+
+app.get("*", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+initializeDatabase().then(async () => {
+    await fetchAndStoreJobs();
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+});
