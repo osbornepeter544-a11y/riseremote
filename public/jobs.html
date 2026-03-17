@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Browse Jobs | RiseRemote</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Browse remote jobs updated automatically.">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<header>
+    <div class="container">
+        <h1>RiseRemote</h1>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="jobs.html">Jobs</a>
+            <a href="apply.html">Apply Smart</a>
+        </nav>
+    </div>
+</header>
+
+<section class="hero">
+    <div class="container">
+        <h2>Available Remote Jobs</h2>
+        <p>Automatically aggregated from multiple sources.</p>
+    </div>
+</section>
+
+<section class="features">
+    <div class="container" id="jobsContainer">
+        <p>Loading jobs...</p>
+    </div>
+
+    <div class="container" style="margin-top: 30px; text-align: center;">
+        <button id="prevBtn" class="btn-primary" disabled>Previous</button>
+        <span id="pageInfo" style="margin: 0 15px;"></span>
+        <button id="nextBtn" class="btn-primary">Next</button>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <p>© 2026 RiseRemote. Built to empower African tech talent.</p>
+    </div>
+</footer>
+
+<script>
+let currentPage = 1;
+const limit = 20;
+let totalPages = 1;
+
+async function fetchJobs(page = 1) {
+    try {
+        const response = await fetch(`/api/jobs?page=${page}&limit=${limit}`);
+        const result = await response.json();
+
+        const jobs = result.data;
+        totalPages = result.totalPages;
+
+        const container = document.getElementById("jobsContainer");
+        container.innerHTML = "";
+
+        jobs.forEach(job => {
+            const jobDiv = document.createElement("div");
+            jobDiv.className = "feature";
+
+            jobDiv.innerHTML = `
+                <h3>${job.title}</h3>
+                <p><strong>Company:</strong> ${job.company}</p>
+                <p><strong>Category:</strong> ${job.category}</p>
+                <a href="${job.url}" target="_blank" class="btn-primary">Apply Now</a>
+            `;
+
+            container.appendChild(jobDiv);
+        });
+
+        document.getElementById("pageInfo").innerText =
+            `Page ${result.page} of ${result.totalPages}`;
+
+        document.getElementById("prevBtn").disabled = (page <= 1);
+        document.getElementById("nextBtn").disabled = (page >= totalPages);
+
+        currentPage = page;
+
+    } catch (error) {
+        document.getElementById("jobsContainer").innerHTML =
+            "<p>Failed to load jobs. Please try again later.</p>";
+    }
+}
+
+document.getElementById("prevBtn").addEventListener("click", () => {
+    if (currentPage > 1) {
+        fetchJobs(currentPage - 1);
+    }
+});
+
+document.getElementById("nextBtn").addEventListener("click", () => {
+    if (currentPage < totalPages) {
+        fetchJobs(currentPage + 1);
+    }
+});
+
+fetchJobs();
+</script>
+
+</body>
+</html>
