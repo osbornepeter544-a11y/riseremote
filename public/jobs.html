@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Browse Jobs | RiseRemote</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Browse entry-level remote tech jobs for Africans.">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<header>
+    <div class="container">
+        <h1>RiseRemote</h1>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="jobs.html">Jobs</a>
+            <a href="apply.html">Apply Smart</a>
+        </nav>
+    </div>
+</header>
+
+<section class="hero">
+    <div class="container">
+        <h2>Available Remote Tech Jobs</h2>
+        <p>Real-time remote tech jobs updated automatically.</p>
+    </div>
+</section>
+
+<section class="features">
+    <div class="container" id="jobsContainer">
+        <p>Loading jobs...</p>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <p>© 2026 RiseRemote. Built to empower African tech talent.</p>
+    </div>
+</footer>
+
+<script>
+async function fetchJobs(page = 1) {
+    try {
+        const response = await fetch(`/api/jobs?page=${page}&limit=50`);
+        const result = await response.json();
+
+        const jobs = result.data;
+        const container = document.getElementById("jobsContainer");
+        container.innerHTML = "";
+
+        jobs.forEach(job => {
+            const jobDiv = document.createElement("div");
+            jobDiv.className = "feature";
+
+            jobDiv.innerHTML = `
+                <h3>${job.title}</h3>
+                <p><strong>Company:</strong> ${job.company}</p>
+                <p><strong>Category:</strong> ${job.category}</p>
+                <a href="${job.url}" target="_blank" class="btn-primary">Apply Now</a>
+            `;
+
+            container.appendChild(jobDiv);
+        });
+
+    } catch (error) {
+        document.getElementById("jobsContainer").innerHTML =
+            "<p>Failed to load jobs. Please try again later.</p>";
+    }
+}
+
+fetchJobs();
+</script>
+
+</body>
+</html>
